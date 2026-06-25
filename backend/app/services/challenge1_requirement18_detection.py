@@ -1,22 +1,20 @@
 import os
-from openai import OpenAI
+import json
+from google import genai
+from google.genai import types
 from app.core.config import settings
 
 class ChallengeAService:
     def __init__(self):
-        # Initializing the DeepSeek API client via central core configuration
-        self.client = OpenAI(
-            api_key=settings.DEEPSEEK_API_KEY,
-            base_url="https://api.deepseek.com/v1"
-        )
+        self.client = genai.Client(api_key=settings.GEMINI_API_KEY)
 
     def analyze_documents(self, doc_alpha_text: str, doc_beta_text: str) -> str:
         """
         Analyzes and compares two large documents to detect which one satisfies Requirement 18
-        based on the 'Shared Locus of Decision' philosophy.
+        based on the 'Shared Locus of Decision' philosophy and extracts visual/location parameters.
         """
         
-        # 1.  System Prompt
+        # 1. System Prompt المحدث ليتطابق مع متطلبات الواجهة الرسومية (Streamlit)
         system_prompt = (
             "You are an expert AI auditor and compliance consultant assessing evidence packs "
             "against the DGA Digital-Experience Maturity Index (2025) - Fourth Perspective (Tools & Technologies).\n\n"
@@ -35,16 +33,20 @@ class ChallengeAService:
             "- The document that SATISFIES (satisfies): Demonstrates a genuine co-creation environment where stakeholders and users "
             "hold a part of the decision itself (Shared Locus of Decision) in planning, verifying hypotheses, and co-shaping the results.\n\n"
             "You must perform deep reasoning over the texts, find the subtle differentiator, and output your answer "
-            "strictly as a raw JSON object matching the schema below. Do NOT wrap it in markdown code blocks like ```json or add any conversational text.\n\n"
-            "Required JSON Schema:\n"
+            "strictly as a raw valid JSON object matching the schema below. Do NOT wrap it in markdown code blocks like ```json or add any conversational text.\n\n"
+            "Required JSON Schema (Strictly follow these exact keys for Frontend alignment):\n"
             "{\n"
             "  \"evidence_pack_alpha\": {\n"
             "    \"verdict\": \"satisfies\" or \"does_not_satisfy\",\n"
-            "    \"reason\": \"A detailed, precise engineering justification explaining who holds the deciding authority, quoting or referencing specific evidence from the text.\"\n"
+            "    \"page_number\": \"Specify the exact page number found in text, e.g., 'Page 12' (or 'Unknown' if not explicit)\",\n"
+            "    \"location_context\": \"Specify the context section or table name, e.g., 'Section 3.2: Governance'\",\n"
+            "    \"text_content\": \"Extract the EXACT verbatim textual quotation or key sentence from the text that triggered this judgment. Do not summarize.\"\n"
             "  },\n"
             "  \"evidence_pack_beta\": {\n"
             "    \"verdict\": \"satisfies\" or \"does_not_satisfy\",\n"
-            "    \"reason\": \"A detailed, precise engineering justification explaining who holds the deciding authority, quoting or referencing specific evidence from the text.\"\n"
+            "    \"page_number\": \"Specify the exact page number found in text, e.g., 'Page 27' (or 'Unknown' if not explicit)\",\n"
+            "    \"location_context\": \"Specify the context section or table name, e.g., 'Table 4: Decision Matrix'\",\n"
+            "    \"text_content\": \"Extract the EXACT verbatim textual quotation or key sentence from the text that triggered this judgment. Do not summarize.\"\n"
             "  }\n"
             "}"
         )
@@ -57,23 +59,23 @@ class ChallengeAService:
         )
 
         try:
-            # 3. Requesting deep analysis from DeepSeek API
-            response = self.client.chat.completions.create(
-                model="deepseek-chat",
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_content}
-                ],
-                temperature=0.1, # Lowest temperature to enforce strict factuality and remove hallucinations
-                response_format={"type": "json_object"} # Forces the engine to return a valid JSON object
+            # 3. Requesting analysis using Google GenAI SDK
+            response = self.client.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=user_content,
+                config=types.GenerateContentConfig(
+                    system_instruction=system_prompt,
+                    temperature=0.1,
+                    # إجبار النموذج على إرجاع JSON نظيف وهيكلي مطابق تماماً للمطلوب
+                    response_mime_type="application/json"
+                )
             )
             
-            # Returning the raw JSON string
-            return response.choices[0].message.content
+            # إرجاع النص المولد وهو الـ JSON النظيف الحقيقي
+            return response.text
 
         except Exception as e:
-            # Handling API or network connection errors gracefully for cloud runtime
-            return {
-                "error": "Failed to analyze documents via DeepSeek API",
+            return json.dumps({
+                "error": "Failed to analyze documents via Gemini Native API",
                 "details": str(e)
-            }
+            }, ensure_ascii=False)

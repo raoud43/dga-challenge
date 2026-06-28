@@ -3,6 +3,7 @@ from typing import List
 
 class RequirementItem(BaseModel):
     requirement_number: int = Field(..., description="رقم المتطلب التسلسلي من 1 إلى 22", ge=1, le=22)
+    document_page_number: int = Field(..., description="رقم الصفحة في المستند التي يوجد بها هذا المتطلب")
     axis_number: int = Field(..., description="رقم المحور التابع له المتطلب من 1 إلى 5", ge=1, le=5)
     axis_name: str = Field(..., description="اسم المحور باللغة العربية")
     question: str = Field(..., description="نص السؤال التدقيقي الذي يبدأ بـ هل")

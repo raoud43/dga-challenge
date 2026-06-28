@@ -1,121 +1,137 @@
 import os
 import sys
-
-# حساب المسار الرئيسي للمشروع (المجلد الأب للفرونت إند والباكيند) وحقنه في بايثون
-ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if ROOT_DIR not in sys.path:
-    sys.path.insert(0, ROOT_DIR)
-
-    
 import json
 import requests
-# بقية الاستدعاءات...
-# الآن بقية الـ Imports الخاصة بكِ ستعمل بأمان تّام
 import streamlit as st
-# ... بقية الاستيرادات الكود الخاص بكِ
 
-# تحديد رابط الـ Backend بشكل ديناميكي (محلياً أو سحابياً عبر دوكر)
-BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000")
+current_dir = os.path.dirname(os.path.abspath(__file__))
+if current_dir not in sys.path:
+    sys.path.append(current_dir)
 
-# إعدادات الشاشة الأساسية
+from config import settings
+
 st.set_page_config(page_title="AI Engineering Challenge Dashboard", layout="wide")
 
-# ... (هنا نترك كود الـ CSS والاستايل المكتوب في رسالتكِ كما هو دون تغيير) ...
+
+if 'res_a' not in st.session_state: st.session_state.res_a = None
+if 'res_b1' not in st.session_state: st.session_state.res_b1 = None
+if 'res_b2' not in st.session_state: st.session_state.res_b2 = None
+
+
+# Custom CSS 
+st.markdown("""
+    <style>
+    .main-title { font-family: sans-serif; color: #2E86C1; text-align: center; }
+    .challenge-header { font-family: sans-serif; color: #1B4F72; border-bottom: 2px solid #2E86C1; }
+    </style>
+""", unsafe_allow_html=True)
 
 st.markdown("<h1 class='main-title'>AI Engineering Challenge Dashboard</h1>", unsafe_allow_html=True)
 st.markdown("---")
 
-tab_challenge_a, tab_challenge_b = st.tabs([
-    "🎯 Challenge A — Requirement-18 Detection", 
-    "📊 Challenge B — Requirements Extraction (VLM + LLM)"
-])
+tab_a, tab_b = st.tabs(["🎯 Challenge A — Requirement-18 Detection", "📊 Challenge B — Requirements Extraction (VLM + LLM)"])
 
 # =========================================================================
-# 🎯 التحدي الأول الحقيقي عبر الـ API
+# Challenge A
 # =========================================================================
-with tab_challenge_a:
-    st.markdown("<h2 class='challenge-header'>🎯 Challenge A: Requirement-18 Detection</h2>", unsafe_allow_html=True)
+with tab_a:
+    st.markdown("<h2 class='challenge-header'>🎯  Requirement-18 Detection</h2>", unsafe_allow_html=True)
     
-    st.markdown("### 📤 Upload the documents")
-    col_up1, col_up2 = st.columns(2)
-    with col_up1:
-        file_alpha = st.file_uploader("(Evidence Pack Alpha)", type=["docx"], key="upload_alpha")
-    with col_up2:
-        file_beta = st.file_uploader("(Evidence Pack Beta)", type=["docx"], key="upload_beta")
+    col1, col2 = st.columns(2)
+    with col1: file_alpha = st.file_uploader("Evidence Pack Alpha", type=["docx"], key="alpha")
+    with col2: file_beta = st.file_uploader("Evidence Pack Beta", type=["docx"], key="beta")
     
-    if st.button("🚀 Run Compliance Audit", key="btn_run_a"):
+    if st.button("🚀 Run Compliance Audit", key="run_a"):
         if file_alpha and file_beta:
-            with st.spinner("جاري الاستخراج والتحليل عبر الـ API الخلفي..."):
+            with st.spinner("🚀 Analyzing documents with Gemini (this may take a minute)..."):
                 try:
-                    # 1. استخراج النصوص محلياً في الواجهة لتوفير حجم نقل البيانات
-                    from backend.app.utils.docx_parser import extract_text_and_tables_from_docx
-                    
-                    doc_alpha_text = extract_text_and_tables_from_docx(file_alpha.getvalue())
-                    doc_beta_text = extract_text_and_tables_from_docx(file_beta.getvalue())
-                    
-                    # 2. إرسال البيانات عبر الـ HTTP POST إلى الـ FastAPI Backend
-                    payload = {
-                        "doc_alpha_text": doc_alpha_text,
-                        "doc_beta_text": doc_beta_text
+                    files = {
+                        'file_alpha': (file_alpha.name, file_alpha.getvalue(), 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'),
+                        'file_beta': (file_beta.name, file_beta.getvalue(), 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')
                     }
-                    response = requests.post(f"{BACKEND_URL}/api/challenge-a", json=payload)
+                    response = requests.post(
+                        f"{settings.BACKEND_URL}/api/challenge-a", 
+                        files=files, 
+                        timeout=300 
+                    )   
                     
                     if response.status_code == 200:
-                        # تحويل النص المستلم إلى قاموس بايثون والتعامل معه ديناميكياً
-                        backend_output = response.json()
-                        if isinstance(backend_output, str):
-                            backend_output = json.loads(backend_output)
-                        
-                        # ... (هنا نترك كود الرسم والتظليل البصري للأعمدة col_res1 و col_res2 كما كتبتيه تماماً) ...
-                        st.success("🎯 اكتمل التحليل المتقاطع بنجاح!")
-                        st.code(response.json(), language="json")
+                        st.session_state.res_a = response.json()
+                        st.rerun() 
                     else:
-                        st.error(f"❌ خطأ في الاتصال بالخادم: {response.text}")
+                        st.error(f"❌ Server Error ({response.status_code}): {response.text}")
+                except requests.exceptions.ReadTimeout:
+                    st.error("⏰ Error: The request timed out. The server is still processing, please try again later.")
                 except Exception as e:
-                    st.error(f"🚨 فشل النظام في معالجة الملفات: {str(e)}")
+                    st.error(f"🚨 Pipeline Error: {str(e)}")
         else:
-            st.warning("⚠️ الرجاء رفع الملفين معاً لبدء عملية المقارنة.")
+            st.warning("⚠️ Please upload both documents.")
+
+    if st.session_state.res_a:
+        st.success("🎯 Compliance audit complete!")
+        st.json(st.session_state.res_a)
+        st.download_button("📥 Download JSON Results", 
+                           data=json.dumps(st.session_state.res_a, indent=4, ensure_ascii=False),
+                           file_name="challenge_a_results.json", mime="application/json")
 
 # =========================================================================
-# 📊 التحدي الثاني الحقيقي عبر الـ VLM API
+# Challenge B 
 # =========================================================================
-with tab_challenge_b:
-    st.markdown("<h2 class='challenge-header'>📊 Challenge B: Requirements Extraction (VLM + LLM)</h2>", unsafe_allow_html=True)
+with tab_b:
+    st.markdown("<h2 class='challenge-header'>📊 Requirements Extraction (VLM + LLM)</h2>", unsafe_allow_html=True)
     
-    st.markdown("### 📤 رفع وثائق المتطلبات البصرية")
-    file_challenge_b = st.file_uploader("ارفع ملف PDF الخاص بالدليل الحكومي", type=["pdf"], key="upload_vlm")
+    col_a, col_b = st.columns(2)
+
     
-    if st.button("🔍 تحليل واستخراج المتطلبات عبر الـ VLM", key="btn_run_b"):
-        if file_challenge_b:
-            with st.spinner("جاري إرسال الملف وتحليله بصرياً عبر نموذج DeepSeek VLM السحابي..."):
-                try:
-                    # إرسال ملف الـ PDF كـ Multipart Form Data إلى الـ Backend
-                    files = {"file": (file_challenge_b.name, file_challenge_b.getvalue(), "application/pdf")}
-                    response = requests.post(f"{BACKEND_URL}/api/challenge-b", files=files)
+    def get_axis_style(axis_number):
+        colors = {1: "#FFF9C4", 2: "#E3F2FD", 3: "#FFEBEE", 4: "#E8F5E9", 5: "#FCE4EC"}
+        borders = {1: "#FBC02D", 2: "#1976D2", 3: "#D32F2F", 4: "#388E3C", 5: "#C2185B"}
+        color = colors.get(axis_number, "#F5F5F5")
+        border = borders.get(axis_number, "#9E9E9E")
+        return color, border
+
+    def process_and_display(file, col, state_key, title):
+        with col:
+            st.subheader(title)
+            uploaded_file = st.file_uploader(f"Upload {title}", type=["pdf"], key=f"uploader_{state_key}")
+            if st.button(f"🔍 Analyze {title}", key=f"btn_{state_key}"):
+                if uploaded_file:
+                    with st.spinner("Analyzing..."):
+                        files = {"file": (uploaded_file.name, uploaded_file.getvalue(), "application/pdf")}
+                        response = requests.post(f"{settings.BACKEND_URL}/api/challenge-b", files=files)
+                        if response.status_code == 200:
+                            st.session_state[state_key] = response.json()
+                        else:
+                            st.error(f"Server Error: {response.text}")
+
+            if state_key in st.session_state and st.session_state[state_key]:
+                data = st.session_state[state_key]
+                
+                
+                st.download_button(
+                    label=f"📥 Download {title} JSON",
+                    data=json.dumps(data, indent=4, ensure_ascii=False).encode('utf-8'),
+                    file_name=f"{state_key}_results.json",
+                    mime="application/json"
+                )
+
+               
+                for req in data.get("requirements", []):
+                    axis_num = req.get('axis_number', 0)
+                    bg_color, border_color = get_axis_style(axis_num)
                     
-                    if response.status_code == 200:
-                        extracted_data = response.json()
-                        st.success("🎯 تم الاستخراج البصري وتحقيق البنية الهيكلية بنجاح!")
-                        
-                        # عرض البيانات الحقيقية في جدول مبهر ومنظم
-                        st.subheader("📋 مصفوفة المتطلبات المستخرجة من المستند")
-                        
-                        requirements_list = extracted_data.get("requirements", [])
-                        
-                        # بناء جدول Streamlit تفاعلي حقيقي يعرض الـ 8 حقول المستخرجة بذكاء
-                        st.dataframe(requirements_list, use_container_width=True)
-                        
-                        # إضافة زر لتحميل ملف الـ JSON النهائي لتعزيز جودة التسليم (Maximum Criterion)
-                        json_string = json.dumps(extracted_data, ensure_ascii=False, indent=4)
-                        st.download_button(
-                            label="📥 تحميل مصفوفة المتطلبات كملف JSON مهيكل",
-                            data=json_string,
-                            file_name="digital_experience_requirements.json",
-                            mime="application/json"
-                        )
-                    else:
-                        st.error(f"❌ فشل السيرفر في معالجة الصور: {response.text}")
-                except Exception as e:
-                    st.error(f"🚨 خطأ أثناء معالجة خط إنتاج الـ VLM: {str(e)}")
-        else:
-            st.warning("⚠️ الرجاء رفع مستند PDF للبدء.")
+                    
+                    st.markdown(f"""
+                    <div style="background-color: {bg_color}; border-left: 5px solid {border_color}; padding: 15px; border-radius: 5px; margin-bottom: 15px;">
+                        <h4 style="margin-top:0;">{req.get('requirement_number')}. {req.get('axis_name')}</h4>
+                        <p><b>التعريف:</b> {req.get('requirement_definition')}</p>
+                        <p><b>السؤال:</b> {req.get('question')}</p>
+                        <p><b>أمثلة الأدلة:</b> {', '.join(str(e) for e in req.get('evidence_examples', []))}</p>
+                        <p><b>صيغة الدليل:</b> {req.get('evidence_format')}</p>
+                        <p><b>مؤشر الشمولية:</b> {req.get('counts_toward_inclusivity_index')}</p>
+                        <small>صفحة المستند: {req.get('document_page_number')}</small>
+                    </div>
+                    """, unsafe_allow_html=True)
+
+    process_and_display(None, col_a, 'res_b1', "Guide 1")
+    process_and_display(None, col_b, 'res_b2', "Guide 2")

@@ -1,36 +1,33 @@
 import io
+import re  
 from docx import Document
 
 def extract_text_and_tables_from_docx(file_bytes: bytes) -> str:
-    """
-    Reads the docx file directly from memory, extracts text, and converts tables
-    into Markdown format so that the DeepSeek model can understand them accurately.
-    """
-    # Open the file in memory using io.BytesIO
     doc = Document(io.BytesIO(file_bytes))
     content = []
 
-    # 1. Extract regular text from paragraphs
-    content.append("=== Text Document Content ===")
+   
+    content.append("=== Text Content ===")
     for para in doc.paragraphs:
-        if para.text.strip():
-            content.append(para.text.strip())
+        text = para.text.strip()
+        
+        if text and len(re.sub(r'[^a-zA-Z0-9\u0621-\u064A]', '', text)) > 0:
+            content.append(text)
 
-    # 2. Extract tables and convert them to Markdown
+   
     if doc.tables:
-        content.append("\n=== Attached Tables in the Document (Markdown Format) ===")
+        content.append("\n=== Tables ===")
         for i, table in enumerate(doc.tables):
-            content.append(f"\n[Table No. {i+1}]")
             
+            if not table.rows: continue
+            
+            content.append(f"\n[Table {i+1}]")
             for row_idx, row in enumerate(table.rows):
-                # Clean the text inside each cell
-                row_data = [cell.text.strip().replace("\n", " ") for cell in row.cells]
                 
-                # Build the Markdown row
+                row_data = [cell.text.strip().replace("\n", " ").replace("|", "-") for cell in row.cells]
                 markdown_row = "| " + " | ".join(row_data) + " |"
                 content.append(markdown_row)
                 
-                # Add a separator line after the first header row
                 if row_idx == 0:
                     separator = "|" + "|".join(["---"] * len(row.cells)) + "|"
                     content.append(separator)

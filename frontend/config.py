@@ -2,6 +2,6 @@ import os
 
 class Settings:
    
-    BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000")
-
+   raw_url = os.getenv("BACKEND_URL", "https://dga-backend-production-ea1f.up.railway.app")
+   BACKEND_URL = raw_url.rstrip('/')
 settings = Settings()

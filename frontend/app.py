@@ -49,11 +49,11 @@ with tab_a:
                         'file_alpha': (file_alpha.name, file_alpha.getvalue(), 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'),
                         'file_beta': (file_beta.name, file_beta.getvalue(), 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')
                     }
-                    response = requests.post(
-                        f"{settings.BACKEND_URL}/api/challenge-a", 
-                        files=files, 
-                        timeout=300 
-                    )   
+                    backend_url = settings.BACKEND_URL.rstrip('/') 
+                    full_url = f"{backend_url}/api/challenge-a"
+
+
+                    response = requests.post(full_url, files=files, timeout=300)
                     
                     if response.status_code == 200:
                         st.session_state.res_a = response.json()
@@ -98,7 +98,10 @@ with tab_b:
                 if uploaded_file:
                     with st.spinner("Analyzing..."):
                         files = {"file": (uploaded_file.name, uploaded_file.getvalue(), "application/pdf")}
-                        response = requests.post(f"{settings.BACKEND_URL}/api/challenge-b", files=files)
+                        backend_url = settings.BACKEND_URL.rstrip('/')
+                        full_url = f"{backend_url}/api/challenge-b"
+
+                        response = requests.post(full_url, files=files)
                         if response.status_code == 200:
                             st.session_state[state_key] = response.json()
                         else:

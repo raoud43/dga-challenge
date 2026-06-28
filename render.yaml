@@ -3,22 +3,16 @@ services:
     name: dga-backend
     env: docker
     dockerfilePath: backend/Dockerfile
-    
-    port: 8000
     envVars:
       - key: GEMINI_API_KEY
-        
         value: ""
 
   - type: web
     name: dga-frontend
     env: docker
     dockerfilePath: frontend/Dockerfile
-    # Streamlit
-    port: 8501
     envVars:
       - key: BACKEND_URL
-        
         fromService:
           type: web
           name: dga-backend
